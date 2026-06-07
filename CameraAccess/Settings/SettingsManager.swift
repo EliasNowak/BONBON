@@ -16,6 +16,7 @@ final class SettingsManager {
     case speakerOutputEnabled
     case videoStreamingEnabled
     case proactiveNotificationsEnabled
+    case cookClawModeEnabled
   }
 
   private init() {}
@@ -85,13 +86,20 @@ final class SettingsManager {
     set { defaults.set(newValue, forKey: Key.proactiveNotificationsEnabled.rawValue) }
   }
 
+  // MARK: - CookClaw Mode
+
+  var cookClawModeEnabled: Bool {
+    get { defaults.object(forKey: Key.cookClawModeEnabled.rawValue) as? Bool ?? false }
+    set { defaults.set(newValue, forKey: Key.cookClawModeEnabled.rawValue) }
+  }
+
   // MARK: - Reset
 
   func resetAll() {
     for key in [Key.geminiAPIKey, .geminiSystemPrompt, .openClawHost, .openClawPort,
                 .openClawHookToken, .openClawGatewayToken, .webrtcSignalingURL,
                 .speakerOutputEnabled, .videoStreamingEnabled,
-                .proactiveNotificationsEnabled] {
+                .proactiveNotificationsEnabled, .cookClawModeEnabled] {
       defaults.removeObject(forKey: key.rawValue)
     }
   }

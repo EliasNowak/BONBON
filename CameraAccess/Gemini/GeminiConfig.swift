@@ -12,7 +12,19 @@ enum GeminiConfig {
   static let videoFrameInterval: TimeInterval = 1.0
   static let videoJPEGQuality: CGFloat = 0.5
 
-  static var systemInstruction: String { SettingsManager.shared.geminiSystemPrompt }
+  static var systemInstruction: String {
+    if SettingsManager.shared.cookClawModeEnabled {
+      return CookClawSystemPrompt.prompt
+    }
+    return SettingsManager.shared.geminiSystemPrompt
+  }
+
+  static var toolDeclarations: [[String: Any]] {
+    if SettingsManager.shared.cookClawModeEnabled {
+      return CookClawToolDeclarations.allDeclarations()
+    }
+    return ToolDeclarations.allDeclarations()
+  }
 
   static let defaultSystemInstruction = """
     You are an AI assistant for someone wearing Meta Ray-Ban smart glasses. You can see through their camera and have a voice conversation. Keep responses concise and natural.

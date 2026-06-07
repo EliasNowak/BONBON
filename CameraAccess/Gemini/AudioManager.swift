@@ -11,7 +11,7 @@ class AudioManager {
   private var wasCapturingBeforeInterruption = false
   private var useIPhoneMode = false
 
-  private let outputFormat: AVAudioFormat
+  private var outputFormat: AVAudioFormat?
 
   // Accumulate resampled PCM into ~100ms chunks before sending
   private let sendQueue = DispatchQueue(label: "audio.accumulator")
@@ -25,12 +25,17 @@ class AudioManager {
   private var foregroundObserver: NSObjectProtocol?
 
   init() {
-    self.outputFormat = AVAudioFormat(
+    guard let format = AVAudioFormat(
       commonFormat: .pcmFormatInt16,
       sampleRate: GeminiConfig.outputAudioSampleRate,
       channels: GeminiConfig.audioChannels,
       interleaved: true
-    )!
+    ) else {
+      NSLog("[Audio] CRITICAL: Failed to create outputFormat. Check sampleRate=%f channels=%d",
+            GeminiConfig.outputAudioSampleRate, GeminiConfig.audioChannels)
+      return
+    }
+    self.outputFormat = format
   }
 
   func setupAudioSession(useIPhoneMode: Bool = false) throws {
@@ -55,7 +60,13 @@ class AudioManager {
     }
     try session.setPreferredSampleRate(GeminiConfig.inputAudioSampleRate)
     try session.setPreferredIOBufferDuration(0.064)
-    try session.setActive(true)
+    do {
+      try session.setActive(true)
+    } catch {
+      NSLog("[Audio] setActive(true) failed: %@. Attempting to deactivate then reactivate.", error.localizedDescription)
+      try? session.setActive(false)
+      try session.setActive(true)
+    }
     if SettingsManager.shared.speakerOutputEnabled {
       try session.overrideOutputAudioPort(.speaker)
       NSLog("[Audio] Speaker output override: ON (iPhone speaker)")
@@ -70,12 +81,14 @@ class AudioManager {
     guard !isCapturing else { return }
 
     audioEngine.attach(playerNode)
-    let playerFormat = AVAudioFormat(
+    guard let playerFormat = AVAudioFormat(
       commonFormat: .pcmFormatFloat32,
       sampleRate: GeminiConfig.outputAudioSampleRate,
       channels: GeminiConfig.audioChannels,
       interleaved: false
-    )!
+    ) else {
+      throw NSError(domain: "AudioManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create player format"])
+    }
     audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: playerFormat)
 
     let inputNode = audioEngine.inputNode
@@ -97,12 +110,14 @@ class AudioManager {
 
     var converter: AVAudioConverter?
     if needsResample {
-      let resampleFormat = AVAudioFormat(
+      guard let resampleFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: GeminiConfig.inputAudioSampleRate,
         channels: GeminiConfig.audioChannels,
         interleaved: false
-      )!
+      ) else {
+        throw NSError(domain: "AudioManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create resample format"])
+      }
       converter = AVAudioConverter(from: inputNativeFormat, to: resampleFormat)
     }
 
@@ -114,12 +129,12 @@ class AudioManager {
       let pcmData: Data
 
       if let converter {
-        let resampleFormat = AVAudioFormat(
+        guard let resampleFormat = AVAudioFormat(
           commonFormat: .pcmFormatFloat32,
           sampleRate: GeminiConfig.inputAudioSampleRate,
           channels: GeminiConfig.audioChannels,
           interleaved: false
-        )!
+        ) else { return }
         guard let resampled = self.convertBuffer(buffer, using: converter, targetFormat: resampleFormat) else {
           if tapCount <= 3 { NSLog("[Audio] Resample failed for tap #%d", tapCount) }
           return
@@ -152,12 +167,15 @@ class AudioManager {
   func playAudio(data: Data) {
     guard isCapturing, !data.isEmpty else { return }
 
-    let playerFormat = AVAudioFormat(
+    guard let playerFormat = AVAudioFormat(
       commonFormat: .pcmFormatFloat32,
       sampleRate: GeminiConfig.outputAudioSampleRate,
       channels: GeminiConfig.audioChannels,
       interleaved: false
-    )!
+    ) else {
+      NSLog("[Audio] Failed to create playAudio format")
+      return
+    }
 
     let frameCount = UInt32(data.count) / (GeminiConfig.audioBitsPerSample / 8 * GeminiConfig.audioChannels)
     guard frameCount > 0 else { return }

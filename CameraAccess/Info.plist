@@ -53,6 +53,9 @@
 		<!-- Without Developer Mode, this key will need to be set with your Apple Developer Team ID - Set this in Xcode under Signing & Capabilities -->
 		<key>TeamID</key>
 		<string>$(DEVELOPMENT_TEAM)</string>
+		<!-- Enable Display capability for CookClaw cards -->
+		<key>DAMEnabled</key>
+		<true/>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>

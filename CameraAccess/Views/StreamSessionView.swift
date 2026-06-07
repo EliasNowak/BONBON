@@ -66,10 +66,20 @@ struct StreamSessionView: View {
   }
 
   private func startGlassesProcessing() async {
+    NSLog("[StreamSessionView] startGlassesProcessing begin")
     geminiVM.streamingMode = .glasses
+    NSLog("[StreamSessionView] calling handleStartStreaming")
     await viewModel.handleStartStreaming()
+    NSLog("[StreamSessionView] handleStartStreaming done. isStreaming=%@ showError=%@",
+          viewModel.isStreaming ? "true" : "false",
+          viewModel.showError ? "true" : "false")
 
-    guard viewModel.isStreaming, !viewModel.showError else { return }
+    guard viewModel.isStreaming, !viewModel.showError else {
+      NSLog("[StreamSessionView] streaming failed or error shown, aborting gemini start")
+      return
+    }
+    NSLog("[StreamSessionView] starting Gemini session")
     await geminiVM.startSession()
+    NSLog("[StreamSessionView] Gemini session start completed")
   }
 }

@@ -14,6 +14,7 @@ struct SettingsView: View {
   @State private var speakerOutputEnabled: Bool = false
   @State private var videoStreamingEnabled: Bool = true
   @State private var proactiveNotificationsEnabled: Bool = true
+  @State private var cookClawModeEnabled: Bool = false
   @State private var showResetConfirmation = false
 
   var body: some View {
@@ -104,6 +105,10 @@ struct SettingsView: View {
           Toggle("Proactive Notifications", isOn: $proactiveNotificationsEnabled)
         }
 
+        Section(header: Text("CookClaw"), footer: Text("Enable real-time AI cooking guide mode. Replaces the generic assistant with a cooking session brain that tracks recipes, timers, and steps.")) {
+          Toggle("CookClaw Mode", isOn: $cookClawModeEnabled)
+        }
+
         Section {
           Button("Reset to Defaults") {
             showResetConfirmation = true
@@ -153,6 +158,7 @@ struct SettingsView: View {
     speakerOutputEnabled = settings.speakerOutputEnabled
     videoStreamingEnabled = settings.videoStreamingEnabled
     proactiveNotificationsEnabled = settings.proactiveNotificationsEnabled
+    cookClawModeEnabled = settings.cookClawModeEnabled
   }
 
   private func save() {
@@ -168,5 +174,6 @@ struct SettingsView: View {
     settings.speakerOutputEnabled = speakerOutputEnabled
     settings.videoStreamingEnabled = videoStreamingEnabled
     settings.proactiveNotificationsEnabled = proactiveNotificationsEnabled
+    settings.cookClawModeEnabled = cookClawModeEnabled
   }
 }

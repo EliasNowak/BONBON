@@ -11,9 +11,12 @@ class GeminiSessionViewModel: ObservableObject {
   @Published var aiTranscript: String = ""
   @Published var toolCallStatus: ToolCallStatus = .idle
   @Published var openClawConnectionState: OpenClawConnectionState = .notConfigured
+  @Published var cookingState: CookingSessionState? = nil  // Only set in CookClaw mode
   private let geminiService = GeminiLiveService()
   private let openClawBridge = OpenClawBridge()
+  private var cookClawBridge: CookClawBridge?
   private var toolCallRouter: ToolCallRouter?
+  private var cookClawToolRouter: CookClawToolRouter?
   private let audioManager = AudioManager()
   private let eventClient = OpenClawEventClient()
   private var lastVideoFrameTime: Date = .distantPast
@@ -29,7 +32,9 @@ class GeminiSessionViewModel: ObservableObject {
       return
     }
 
+    NSLog("[GeminiSession] Starting session...")
     isGeminiActive = true
+    defer { NSLog("[GeminiSession] startSession finished. isGeminiActive=%@", isGeminiActive ? "true" : "false") }
 
     // Wire audio callbacks
     audioManager.onAudioCaptured = { [weak self] data in
@@ -88,15 +93,32 @@ class GeminiSessionViewModel: ObservableObject {
     await openClawBridge.checkConnection()
     openClawBridge.resetSession()
 
-    // Wire tool call handling
-    toolCallRouter = ToolCallRouter(bridge: openClawBridge)
+    // Wire tool call handling - use CookClaw router in cooking mode
+    if SettingsManager.shared.cookClawModeEnabled {
+      let cookClaw = CookClawBridge()
+      cookClawBridge = cookClaw
+      cookingState = cookClaw.cookingState
 
-    geminiService.onToolCall = { [weak self] toolCall in
-      guard let self else { return }
-      Task { @MainActor in
-        for call in toolCall.functionCalls {
-          self.toolCallRouter?.handleToolCall(call) { [weak self] response in
-            self?.geminiService.sendToolResponse(response)
+      geminiService.onToolCall = { [weak self] toolCall in
+        guard let self else { return }
+        Task { @MainActor in
+          for call in toolCall.functionCalls {
+            cookClaw.handleToolCall(call) { [weak self] response in
+              self?.geminiService.sendToolResponse(response)
+            }
+          }
+        }
+      }
+    } else {
+      toolCallRouter = ToolCallRouter(bridge: openClawBridge)
+
+      geminiService.onToolCall = { [weak self] toolCall in
+        guard let self else { return }
+        Task { @MainActor in
+          for call in toolCall.functionCalls {
+            self.toolCallRouter?.handleToolCall(call) { [weak self] response in
+              self?.geminiService.sendToolResponse(response)
+            }
           }
         }
       }
@@ -117,24 +139,34 @@ class GeminiSessionViewModel: ObservableObject {
         guard !Task.isCancelled else { break }
         self.connectionState = self.geminiService.connectionState
         self.isModelSpeaking = self.geminiService.isModelSpeaking
-        self.toolCallStatus = self.openClawBridge.lastToolCallStatus
+        if let cookClaw = self.cookClawBridge {
+          // In CookClaw mode, track cooking state changes
+          // Tool status comes from the last tool call result
+        } else {
+          self.toolCallStatus = self.openClawBridge.lastToolCallStatus
+        }
         self.openClawConnectionState = self.openClawBridge.connectionState
       }
     }
 
     // Setup audio
     do {
+      NSLog("[GeminiSession] Setting up audio session...")
       try audioManager.setupAudioSession(useIPhoneMode: streamingMode == .iPhone)
+      NSLog("[GeminiSession] Audio session setup complete")
     } catch {
+      NSLog("[GeminiSession] Audio setup FAILED: %@", error.localizedDescription)
       errorMessage = "Audio setup failed: \(error.localizedDescription)"
       isGeminiActive = false
       return
     }
 
     // Connect to Gemini and wait for setupComplete
+    NSLog("[GeminiSession] Connecting to Gemini WebSocket...")
     let setupOk = await geminiService.connect()
 
     if !setupOk {
+      NSLog("[GeminiSession] Gemini connect/setup failed")
       let msg: String
       if case .error(let err) = geminiService.connectionState {
         msg = err
@@ -149,11 +181,15 @@ class GeminiSessionViewModel: ObservableObject {
       connectionState = .disconnected
       return
     }
+    NSLog("[GeminiSession] Gemini connected and ready")
 
     // Start mic capture
     do {
+      NSLog("[GeminiSession] Starting mic capture...")
       try audioManager.startCapture()
+      NSLog("[GeminiSession] Mic capture started")
     } catch {
+      NSLog("[GeminiSession] Mic capture FAILED: %@", error.localizedDescription)
       errorMessage = "Mic capture failed: \(error.localizedDescription)"
       geminiService.disconnect()
       stateObservation?.cancel()

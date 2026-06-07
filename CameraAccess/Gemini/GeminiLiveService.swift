@@ -194,7 +194,7 @@ class GeminiLiveService: ObservableObject {
         ],
         "tools": [
           [
-            "functionDeclarations": ToolDeclarations.allDeclarations()
+            "functionDeclarations": GeminiConfig.toolDeclarations
           ]
         ],
         "realtimeInputConfig": [
