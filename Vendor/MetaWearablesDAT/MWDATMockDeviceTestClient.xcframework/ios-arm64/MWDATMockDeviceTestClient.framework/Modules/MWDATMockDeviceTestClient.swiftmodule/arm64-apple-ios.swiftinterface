@@ -1,0 +1,46 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.2.3 (swiftlang-6.2.3.3.21 clang-1700.6.3.2)
+// swift-module-flags: -target arm64-apple-ios15.2 -enable-objc-interop -enable-library-evolution -swift-version 6 -Osize -module-name MWDATMockDeviceTestClient -package-name MetaWearablesDAT
+// swift-module-flags-ignorable: -no-verify-emitted-module-interface -formal-cxx-interoperability-mode=off -interface-compiler-version 6.2.3
+import Foundation
+import Swift
+import _Concurrency
+import _StringProcessing
+import _SwiftConcurrencyShims
+final public class MockDeviceTestClient : Swift.Sendable {
+  public init(port: Swift.UInt16)
+  public init()
+  public init(portFilePath: Swift.String)
+  #if compiler(>=5.3) && $NonescapableTypes
+  @discardableResult
+  final public func pairDevice() -> Swift.String?
+  #endif
+  @discardableResult
+  final public func unpairDevice(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func powerOn(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func powerOff(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func don(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func doff(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func fold(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func unfold(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func captouchTap(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func captouchTapAndHold(deviceId: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func setCameraFeed(deviceId: Swift.String, resourceName: Swift.String, ext: Swift.String) -> Swift.Bool
+  @discardableResult
+  final public func setCapturedImage(deviceId: Swift.String, resourceName: Swift.String, ext: Swift.String) -> Swift.Bool
+  #if compiler(>=5.3) && $NonescapableTypes
+  final public func getDeviceState() -> [Swift.String : Any]?
+  #endif
+  final public func healthCheck() -> Swift.Bool
+  final public func waitForServer(timeout: Foundation.TimeInterval = 10) -> Swift.Bool
+  @objc deinit
+}

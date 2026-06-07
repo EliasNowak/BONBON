@@ -1,0 +1,14 @@
+.DS_Store
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Local VisionClaw secrets and generated server dependencies.
+CameraAccess/Secrets.swift
+server/node_modules/
+server/package-lock.json
+
+# Keep the vendored SDK package commit-ready.
+!Vendor/MetaWearablesDAT/*.xcframework/
+!Vendor/MetaWearablesDAT/*.xcframework/**
