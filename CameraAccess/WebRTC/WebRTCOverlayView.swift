@@ -24,7 +24,6 @@ struct WebRTCStatusBar: View {
     switch webrtcVM.connectionState {
     case .connected: return .green
     case .connecting, .waitingForPeer: return .yellow
-    case .backgrounded: return .orange
     case .error: return .red
     case .disconnected: return .gray
     }
@@ -35,7 +34,6 @@ struct WebRTCStatusBar: View {
     case .connected: return "Live"
     case .connecting: return "Connecting..."
     case .waitingForPeer: return "Waiting..."
-    case .backgrounded: return "Paused"
     case .error: return "Error"
     case .disconnected: return "Off"
     }

@@ -32,7 +32,7 @@ class WebRTCClient: NSObject {
     super.init()
   }
 
-  func setup(iceServers: [RTCIceServer]? = nil) {
+  func setup(videoOnly: Bool = false, iceServers: [RTCIceServer]? = nil) {
     let config = RTCConfiguration()
     config.iceServers = iceServers ?? [RTCIceServer(urlStrings: WebRTCConfig.stunServers)]
     config.sdpSemantics = .unifiedPlan
@@ -47,10 +47,10 @@ class WebRTCClient: NSObject {
       with: config, constraints: constraints, delegate: self
     )
 
-    createMediaTracks()
+    createMediaTracks(videoOnly: videoOnly)
   }
 
-  private func createMediaTracks() {
+  private func createMediaTracks(videoOnly: Bool) {
     // Video track — custom source fed by DAT SDK frames
     videoSource = factory.videoSource()
     videoCapturer = CustomVideoCapturer(delegate: videoSource)
@@ -58,14 +58,16 @@ class WebRTCClient: NSObject {
     localVideoTrack?.isEnabled = true
     peerConnection?.add(localVideoTrack!, streamIds: ["stream0"])
 
-    // Audio track — WebRTC native audio (handles mic capture, AEC, playback)
-    let audioConstraints = RTCMediaConstraints(
-      mandatoryConstraints: nil, optionalConstraints: nil
-    )
-    let audioSource = factory.audioSource(with: audioConstraints)
-    localAudioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
-    localAudioTrack?.isEnabled = true
-    peerConnection?.add(localAudioTrack!, streamIds: ["stream0"])
+    // Audio track — only if not in video-only mode
+    if !videoOnly {
+      let audioConstraints = RTCMediaConstraints(
+        mandatoryConstraints: nil, optionalConstraints: nil
+      )
+      let audioSource = factory.audioSource(with: audioConstraints)
+      localAudioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
+      localAudioTrack?.isEnabled = true
+      peerConnection?.add(localAudioTrack!, streamIds: ["stream0"])
+    }
   }
 
   /// Called by ViewModel to push video frames from DAT SDK / iPhone camera.

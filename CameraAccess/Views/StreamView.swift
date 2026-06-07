@@ -170,9 +170,10 @@ struct ControlsView: View {
         CircleButton(icon: "camera.fill", text: nil) {
           viewModel.capturePhoto()
         }
+        .accessibilityIdentifier("capture_photo_button")
       }
 
-      // Gemini AI button (disabled when WebRTC is active — audio conflict)
+      // Gemini AI button
       CircleButton(
         icon: geminiVM.isGeminiActive ? "waveform.circle.fill" : "waveform.circle",
         text: "AI"
@@ -185,10 +186,8 @@ struct ControlsView: View {
           }
         }
       }
-      .opacity(webrtcVM.isActive ? 0.4 : 1.0)
-      .disabled(webrtcVM.isActive)
 
-      // WebRTC Live Stream button (disabled when Gemini is active — audio conflict)
+      // WebRTC Live Stream button — video-only when AI is active to avoid mic conflict
       CircleButton(
         icon: webrtcVM.isActive
           ? "antenna.radiowaves.left.and.right.circle.fill"
@@ -199,12 +198,11 @@ struct ControlsView: View {
           if webrtcVM.isActive {
             webrtcVM.stopSession()
           } else {
-            await webrtcVM.startSession()
+            let videoOnly = geminiVM.isGeminiActive
+            await webrtcVM.startSession(videoOnly: videoOnly)
           }
         }
       }
-      .opacity(geminiVM.isGeminiActive ? 0.4 : 1.0)
-      .disabled(geminiVM.isGeminiActive)
     }
   }
 }

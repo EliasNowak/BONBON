@@ -45,8 +45,8 @@
 		<!-- Tell DAT your URL scheme so it can be called back from Meta AI -->
 		<string>cameraaccess://</string>
 		<key>MetaAppID</key>
-		<!-- Use 0 while testing through Meta AI Developer Mode. -->
-		<string>0</string>
+		<!-- Use 0 while testing through Meta AI Developer Mode. Override META_APP_ID for UI tests. -->
+		<string>$(META_APP_ID)</string>
 		<!-- Without Developer Mode, set this to the ClientToken from Wearables Developer Center. -->
 		<key>ClientToken</key>
 		<string>$(CLIENT_TOKEN)</string>

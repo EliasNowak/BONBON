@@ -1,0 +1,32 @@
+{
+  "configurations" : [
+    {
+      "id" : "E699CCAE-2E81-5067-0052-C24000000001",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:CameraAccess.xcodeproj",
+        "identifier" : "E699CC942E8150670052C240",
+        "name" : "CameraAccessTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:CameraAccess.xcodeproj",
+        "identifier" : "E699CCA32E8150670052C240",
+        "name" : "CameraAccessUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

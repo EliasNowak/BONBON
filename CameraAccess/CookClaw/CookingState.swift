@@ -333,3 +333,107 @@ struct CookClawResponse: Codable {
     let message: String
   }
 }
+
+// MARK: - WebRTC Overlay Snapshot
+
+/// A lightweight, serializable snapshot of the cooking session state
+/// that can be sent over the WebRTC signaling WebSocket to render
+/// a companion overlay on the web viewer.
+struct WebRTCOverlaySnapshot: Codable {
+  struct TimerSnapshot: Codable {
+    let name: String
+    let remainingSeconds: Int
+    let isPaused: Bool
+    let isFinished: Bool
+  }
+
+  struct WarningSnapshot: Codable {
+    let type: String
+    let message: String
+  }
+
+  struct StepSnapshot: Codable {
+    let id: String
+    let instruction: String
+    let type: String  // "prep", "activeCooking", "waiting", "plating"
+    let status: String // "pending", "current", "completed"
+    let estimatedDurationSeconds: Int?
+    let targetTemperature: String?
+    let visualCue: String?
+  }
+
+  let recipeTitle: String?
+  let stepInstruction: String?
+  let visualCue: String?
+  let targetTemperature: String?
+  let progressText: String
+  let isComplete: Bool
+  let isPaused: Bool
+  let activeTimers: [TimerSnapshot]
+  let warnings: [WarningSnapshot]
+  let steps: [StepSnapshot]
+  let currentStepId: String?
+}
+
+extension WebRTCOverlaySnapshot {
+  @MainActor
+  init(from state: CookingSessionState) {
+    self.recipeTitle = state.currentRecipe?.title
+    self.stepInstruction = state.currentStep?.instruction
+    self.visualCue = state.currentStep?.visualCue
+    self.targetTemperature = state.currentStep?.targetTemperature
+    self.progressText = Self.buildProgressText(state: state)
+    self.isComplete = state.isComplete
+    self.isPaused = state.isPaused
+    self.currentStepId = state.currentStep?.id
+    
+    // Build all steps with their status
+    if let recipe = state.currentRecipe {
+      self.steps = recipe.steps.map { step in
+        let status: String
+        if state.completedStepIds.contains(step.id) {
+          status = "completed"
+        } else if step.id == state.currentStep?.id {
+          status = "current"
+        } else {
+          status = "pending"
+        }
+        return StepSnapshot(
+          id: step.id,
+          instruction: step.instruction,
+          type: step.type.rawValue,
+          status: status,
+          estimatedDurationSeconds: step.estimatedDurationSeconds,
+          targetTemperature: step.targetTemperature,
+          visualCue: step.visualCue
+        )
+      }
+    } else {
+      self.steps = []
+    }
+    
+    self.activeTimers = state.activeTimers.map { timer in
+      TimerSnapshot(
+        name: timer.name,
+        remainingSeconds: timer.remainingSeconds,
+        isPaused: timer.isPaused,
+        isFinished: timer.isFinished
+      )
+    }
+    self.warnings = Array(state.detectedWarnings.suffix(3)).map { warning in
+      WarningSnapshot(
+        type: warning.type.rawValue,
+        message: warning.message
+      )
+    }
+  }
+
+  @MainActor
+  private static func buildProgressText(state: CookingSessionState) -> String {
+    guard let recipe = state.currentRecipe else { return "" }
+    let total = recipe.steps.count
+    let done = state.completedStepIds.count
+    let pct = Int(state.progressPercentage * 100)
+    return "Step \(done)/\(total) • \(pct)%"
+  }
+}

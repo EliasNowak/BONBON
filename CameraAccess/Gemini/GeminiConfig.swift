@@ -66,6 +66,19 @@ enum GeminiConfig {
     return URL(string: "\(websocketBaseURL)?key=\(apiKey)")
   }
 
+  static func openClawChatURL() -> URL? {
+    return openClawURL(path: "/v1/chat/completions")
+  }
+
+  static func openClawWebSocketURL() -> URL? {
+    guard var components = normalizedOpenClawComponents() else { return nil }
+    components.scheme = components.scheme == "https" ? "wss" : "ws"
+    components.path = ""
+    components.query = nil
+    components.fragment = nil
+    return components.url
+  }
+
   static var isConfigured: Bool {
     return apiKey != "YOUR_GEMINI_API_KEY" && !apiKey.isEmpty
   }
@@ -74,5 +87,34 @@ enum GeminiConfig {
     return openClawGatewayToken != "YOUR_OPENCLAW_GATEWAY_TOKEN"
       && !openClawGatewayToken.isEmpty
       && openClawHost != "http://YOUR_MAC_HOSTNAME.local"
+      && openClawURL(path: "/") != nil
+  }
+
+  private static func openClawURL(path: String) -> URL? {
+    guard var components = normalizedOpenClawComponents() else { return nil }
+    components.path = path.hasPrefix("/") ? path : "/\(path)"
+    components.query = nil
+    components.fragment = nil
+    return components.url
+  }
+
+  private static func normalizedOpenClawComponents() -> URLComponents? {
+    let trimmedHost = openClawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedHost.isEmpty else { return nil }
+
+    let raw = trimmedHost.contains("://") ? trimmedHost : "http://\(trimmedHost)"
+    guard var components = URLComponents(string: raw),
+          components.host != nil else {
+      return nil
+    }
+
+    if components.scheme == nil {
+      components.scheme = "http"
+    }
+    if components.port == nil {
+      components.port = openClawPort
+    }
+
+    return components
   }
 }

@@ -11,7 +11,7 @@ class CookClawDisplayManager: ObservableObject {
   @Published var lastError: String?
 
   private var display: MWDATDisplay.Display?
-  private var stateListenerToken: AnyCancellable?
+  private var stateListenerToken: AnyListenerToken?
   private var deviceSession: DeviceSession?
 
   /// Attach to an existing started device session and start the display.
@@ -25,7 +25,7 @@ class CookClawDisplayManager: ObservableObject {
 
       // Observe display state
       stateListenerToken = display.statePublisher
-        .sink { [weak self] state in
+        .listen { [weak self] state in
           Task { @MainActor in
             self?.displayState = state
           }
@@ -44,7 +44,6 @@ class CookClawDisplayManager: ObservableObject {
     if let display {
       await display.stop()
     }
-    stateListenerToken?.cancel()
     stateListenerToken = nil
     display = nil
     deviceSession = nil

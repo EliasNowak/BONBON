@@ -76,6 +76,12 @@ class SignalingClient {
     ] as [String: Any])
   }
 
+  func send(overlay payload: [String: Any]) {
+    var dict = payload
+    dict["type"] = "overlay"
+    sendJSON(dict)
+  }
+
   func disconnect() {
     receiveTask?.cancel()
     receiveTask = nil
@@ -134,17 +140,15 @@ class SignalingClient {
 
     switch type {
     case "room_created":
-      if let room = json["room"] as? String {
-        onMessageReceived?(.roomCreated(room))
-      }
+      let room = json["room"] as? String ?? ""
+      onMessageReceived?(.roomCreated(room))
 
     case "room_joined":
       onMessageReceived?(.roomJoined)
 
     case "room_rejoined":
-      if let room = json["room"] as? String {
-        onMessageReceived?(.roomRejoined(room))
-      }
+      let room = json["room"] as? String ?? ""
+      onMessageReceived?(.roomRejoined(room))
 
     case "peer_joined":
       onMessageReceived?(.peerJoined)

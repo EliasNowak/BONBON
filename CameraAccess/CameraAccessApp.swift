@@ -19,16 +19,8 @@ import Foundation
 import MWDATCore
 import SwiftUI
 
-#if canImport(MWDATMockDevice)
-import MWDATMockDevice
-#endif
-
 @main
 struct CameraAccessApp: App {
-  #if canImport(MWDATMockDevice)
-  // Debug menu for simulating device connections during development
-  @StateObject private var debugMenuViewModel = DebugMenuViewModel(mockDeviceKit: MockDeviceKit.shared)
-  #endif
   private let wearables: WearablesInterface
   @StateObject private var wearablesViewModel: WearablesViewModel
 
@@ -40,6 +32,7 @@ struct CameraAccessApp: App {
       NSLog("[CameraAccess] Failed to configure Wearables SDK: \(error)")
       #endif
     }
+
     let wearables = Wearables.shared
     self.wearables = wearables
     self._wearablesViewModel = StateObject(wrappedValue: WearablesViewModel(wearables: wearables))
@@ -58,14 +51,6 @@ struct CameraAccessApp: App {
         } message: {
           Text(wearablesViewModel.errorMessage)
         }
-        #if canImport(MWDATMockDevice)
-      .sheet(isPresented: $debugMenuViewModel.showDebugMenu) {
-        MockDeviceKitView(viewModel: debugMenuViewModel.mockDeviceKitViewModel)
-      }
-      .overlay {
-        DebugMenuView(debugMenuViewModel: debugMenuViewModel)
-      }
-        #endif
 
       // Registration view handles the flow for connecting to the glasses via Meta AI
       RegistrationView(viewModel: wearablesViewModel)

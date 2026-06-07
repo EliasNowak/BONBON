@@ -68,9 +68,11 @@ class StreamSessionViewModel: ObservableObject {
   // WebRTC Live streaming integration
   var webrtcSessionVM: WebRTCSessionViewModel?
 
+  private var overlayTask: Task<Void, Never>?
+
   // The core DAT SDK stream is scoped to a DeviceSession in the vendored SDK.
   private var stream: MWDATCamera.Stream?
-  private var deviceSession: DeviceSession?
+  private(set) var deviceSession: DeviceSession?
   // Listener tokens are used to manage DAT SDK event subscriptions
   private var stateListenerToken: AnyListenerToken?
   private var videoFrameListenerToken: AnyListenerToken?
@@ -92,7 +94,7 @@ class StreamSessionViewModel: ObservableObject {
     self.wearables = wearables
     // Let the SDK auto-select from available devices
     self.deviceSelector = AutoDeviceSelector(wearables: wearables)
-    self.hasActiveDevice = deviceSelector.activeDevice != nil || !wearables.devices.isEmpty
+    self.hasActiveDevice = deviceSelector.activeDevice != nil
     self.knownDeviceCount = wearables.devices.count
 
     // Monitor device availability
@@ -101,7 +103,7 @@ class StreamSessionViewModel: ObservableObject {
         group.addTask { @MainActor [weak self] in
           guard let self else { return }
           for await device in self.deviceSelector.activeDeviceStream() {
-            self.hasActiveDevice = device != nil || !self.wearables.devices.isEmpty
+            self.hasActiveDevice = device != nil
           }
         }
 
@@ -109,7 +111,7 @@ class StreamSessionViewModel: ObservableObject {
           guard let self else { return }
           for await devices in self.wearables.devicesStream() {
             self.knownDeviceCount = devices.count
-            self.hasActiveDevice = self.deviceSelector.activeDevice != nil || !devices.isEmpty
+            self.hasActiveDevice = self.deviceSelector.activeDevice != nil
           }
         }
       }
@@ -282,6 +284,7 @@ class StreamSessionViewModel: ObservableObject {
       self.stream = stream
       attachListeners(to: stream)
       await stream.start()
+      startOverlayHeartbeat()
     } catch {
       streamingStatus = .stopped
       showError("Streaming failed: \(streamingErrorDescription(error))")
@@ -347,10 +350,12 @@ class StreamSessionViewModel: ObservableObject {
 
   func refreshDeviceAvailability() {
     knownDeviceCount = wearables.devices.count
-    hasActiveDevice = deviceSelector.activeDevice != nil || !wearables.devices.isEmpty
+    hasActiveDevice = deviceSelector.activeDevice != nil
   }
 
   func stopSession() async {
+    overlayTask?.cancel()
+    overlayTask = nil
     if streamingMode == .iPhone {
       stopIPhoneSession()
       return
@@ -474,5 +479,22 @@ class StreamSessionViewModel: ObservableObject {
       return formatStreamingError(streamError)
     }
     return error.localizedDescription
+  }
+
+  // MARK: - Overlay Heartbeat
+
+  /// Periodically snapshot the cooking state and send it to the WebRTC viewer.
+  private func startOverlayHeartbeat() {
+    overlayTask?.cancel()
+    overlayTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self else { break }
+        if let cookingState = self.geminiSessionVM?.cookingState {
+          let snapshot = WebRTCOverlaySnapshot(from: cookingState)
+          self.webrtcSessionVM?.sendOverlay(snapshot: snapshot)
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500 ms
+      }
+    }
   }
 }

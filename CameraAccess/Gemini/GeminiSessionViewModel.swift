@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+import Combine
+import MWDATCore
+import MWDATDisplay
 
 @MainActor
 class GeminiSessionViewModel: ObservableObject {
@@ -12,6 +15,7 @@ class GeminiSessionViewModel: ObservableObject {
   @Published var toolCallStatus: ToolCallStatus = .idle
   @Published var openClawConnectionState: OpenClawConnectionState = .notConfigured
   @Published var cookingState: CookingSessionState? = nil  // Only set in CookClaw mode
+  @Published var cookClawDisplayState: MWDATDisplay.DisplayState = .stopped
   private let geminiService = GeminiLiveService()
   private let openClawBridge = OpenClawBridge()
   private var cookClawBridge: CookClawBridge?
@@ -21,8 +25,12 @@ class GeminiSessionViewModel: ObservableObject {
   private let eventClient = OpenClawEventClient()
   private var lastVideoFrameTime: Date = .distantPast
   private var stateObservation: Task<Void, Never>?
+  private var cookClawDisplayManager: CookClawDisplayManager?
+  private var cookClawDisplayRefreshTask: Task<Void, Never>?
+  private var displayCancellables = Set<AnyCancellable>()
 
   var streamingMode: StreamingMode = .glasses
+  weak var deviceSession: DeviceSession?
 
   func startSession() async {
     guard !isGeminiActive else { return }
@@ -98,12 +106,14 @@ class GeminiSessionViewModel: ObservableObject {
       let cookClaw = CookClawBridge()
       cookClawBridge = cookClaw
       cookingState = cookClaw.cookingState
+      cookClawToolRouter = CookClawToolRouter(cookClawBridge: cookClaw, openClawBridge: openClawBridge)
+      await setupCookClawDisplay(for: cookClaw.cookingState)
 
       geminiService.onToolCall = { [weak self] toolCall in
         guard let self else { return }
         Task { @MainActor in
           for call in toolCall.functionCalls {
-            cookClaw.handleToolCall(call) { [weak self] response in
+            self.cookClawToolRouter?.handleToolCall(call) { [weak self] response in
               self?.geminiService.sendToolResponse(response)
             }
           }
@@ -128,6 +138,7 @@ class GeminiSessionViewModel: ObservableObject {
       guard let self else { return }
       Task { @MainActor in
         self.toolCallRouter?.cancelToolCalls(ids: cancellation.ids)
+        self.cookClawToolRouter?.cancelToolCalls(ids: cancellation.ids)
       }
     }
 
@@ -139,13 +150,12 @@ class GeminiSessionViewModel: ObservableObject {
         guard !Task.isCancelled else { break }
         self.connectionState = self.geminiService.connectionState
         self.isModelSpeaking = self.geminiService.isModelSpeaking
-        if let cookClaw = self.cookClawBridge {
-          // In CookClaw mode, track cooking state changes
-          // Tool status comes from the last tool call result
+        self.openClawConnectionState = self.openClawBridge.connectionState
+        if let cookClawToolRouter = self.cookClawToolRouter {
+          self.toolCallStatus = cookClawToolRouter.lastToolCallStatus
         } else {
           self.toolCallStatus = self.openClawBridge.lastToolCallStatus
         }
-        self.openClawConnectionState = self.openClawBridge.connectionState
       }
     }
 
@@ -157,6 +167,7 @@ class GeminiSessionViewModel: ObservableObject {
     } catch {
       NSLog("[GeminiSession] Audio setup FAILED: %@", error.localizedDescription)
       errorMessage = "Audio setup failed: \(error.localizedDescription)"
+      cleanupCookClawDisplay()
       isGeminiActive = false
       return
     }
@@ -177,6 +188,7 @@ class GeminiSessionViewModel: ObservableObject {
       geminiService.disconnect()
       stateObservation?.cancel()
       stateObservation = nil
+      cleanupCookClawDisplay()
       isGeminiActive = false
       connectionState = .disconnected
       return
@@ -194,6 +206,7 @@ class GeminiSessionViewModel: ObservableObject {
       geminiService.disconnect()
       stateObservation?.cancel()
       stateObservation = nil
+      cleanupCookClawDisplay()
       isGeminiActive = false
       connectionState = .disconnected
       return
@@ -216,10 +229,15 @@ class GeminiSessionViewModel: ObservableObject {
     eventClient.disconnect()
     toolCallRouter?.cancelAll()
     toolCallRouter = nil
+    cookClawToolRouter?.cancelAll()
+    cookClawToolRouter = nil
     audioManager.stopCapture()
     geminiService.disconnect()
     stateObservation?.cancel()
     stateObservation = nil
+    cleanupCookClawDisplay()
+    cookClawBridge = nil
+    cookingState = nil
     isGeminiActive = false
     connectionState = .disconnected
     isModelSpeaking = false
@@ -235,6 +253,53 @@ class GeminiSessionViewModel: ObservableObject {
     guard now.timeIntervalSince(lastVideoFrameTime) >= GeminiConfig.videoFrameInterval else { return }
     lastVideoFrameTime = now
     geminiService.sendVideoFrame(image: image)
+  }
+
+  private func setupCookClawDisplay(for state: CookingSessionState) async {
+    guard streamingMode == .glasses, let deviceSession else { return }
+
+    if let device = Wearables.shared.deviceForIdentifier(deviceSession.deviceId),
+       !device.supportsDisplay() {
+      NSLog(
+        "[GeminiSession] Device %@ does not support display; running CookClaw without glasses display",
+        deviceSession.deviceId
+      )
+      cookClawDisplayState = .stopped
+      return
+    }
+
+    let manager = CookClawDisplayManager()
+    cookClawDisplayManager = manager
+
+    manager.$displayState
+      .sink { [weak self] state in
+        self?.cookClawDisplayState = state
+      }
+      .store(in: &displayCancellables)
+
+    await manager.attach(to: deviceSession)
+    await manager.sendCookingCard(state: state)
+
+    cookClawDisplayRefreshTask = Task { [weak self, weak state] in
+      while !Task.isCancelled {
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        guard !Task.isCancelled, let self, let state else { break }
+        await self.cookClawDisplayManager?.sendCookingCard(state: state)
+      }
+    }
+  }
+
+  private func cleanupCookClawDisplay() {
+    cookClawDisplayRefreshTask?.cancel()
+    cookClawDisplayRefreshTask = nil
+    displayCancellables.removeAll()
+    cookClawDisplayState = .stopped
+
+    let manager = cookClawDisplayManager
+    cookClawDisplayManager = nil
+    Task { @MainActor in
+      await manager?.detach()
+    }
   }
 
 }

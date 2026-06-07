@@ -119,7 +119,7 @@ struct NonStreamView: View {
         CustomButton(
           title: isStartingProcessing ? "Starting processing..." : "Start processing on glasses",
           style: .primary,
-          isDisabled: wearablesVM.registrationState != .registered || isStartingProcessing
+          isDisabled: wearablesVM.registrationState != .registered || !viewModel.hasActiveDevice || isStartingProcessing
         ) {
           Task {
             isStartingProcessing = true
@@ -131,7 +131,7 @@ struct NonStreamView: View {
         CustomButton(
           title: "Start streaming",
           style: .secondary,
-          isDisabled: wearablesVM.registrationState != .registered || isStartingProcessing
+          isDisabled: wearablesVM.registrationState != .registered || !viewModel.hasActiveDevice || isStartingProcessing
         ) {
           Task {
             await viewModel.handleStartStreaming()

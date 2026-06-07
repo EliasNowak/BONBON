@@ -7,12 +7,11 @@ enum WebRTCConnectionState: Equatable {
   case connecting
   case waitingForPeer
   case connected
-  case backgrounded
   case error(String)
 }
 
-/// Orchestrates the WebRTC live streaming session: signaling, peer connection, and frame forwarding.
-/// Follows the same @MainActor ObservableObject pattern as GeminiSessionViewModel.
+/// Orchestrates WebRTC live streaming with auto-pairing (no room codes).
+/// The first client to connect is the creator, the second is the viewer.
 @MainActor
 class WebRTCSessionViewModel: ObservableObject {
   @Published var isActive: Bool = false
@@ -26,12 +25,10 @@ class WebRTCSessionViewModel: ObservableObject {
   private var webRTCClient: WebRTCClient?
   private var signalingClient: SignalingClient?
   private var delegateAdapter: WebRTCDelegateAdapter?
+  private var lastOverlaySentTime: Date?
 
-  /// Saved room code for reconnecting after app backgrounding.
-  private var savedRoomCode: String?
-  private var foregroundObserver: Any?
-
-  func startSession() async {
+  /// Starts the WebRTC session. Pass videoOnly=true when Gemini is active (no mic conflict).
+  func startSession(videoOnly: Bool = false) async {
     guard !isActive else { return }
     guard WebRTCConfig.isConfigured else {
       errorMessage = "WebRTC signaling URL not configured."
@@ -40,18 +37,13 @@ class WebRTCSessionViewModel: ObservableObject {
 
     isActive = true
     connectionState = .connecting
-    savedRoomCode = nil
 
-    // Fetch TURN credentials for NAT traversal across networks
     let iceServers = await WebRTCConfig.fetchIceServers()
-
-    setupWebRTCClient(iceServers: iceServers)
-    connectSignaling(rejoinCode: nil)
-    observeForeground()
+    setupWebRTCClient(videoOnly: videoOnly, iceServers: iceServers)
+    connectSignaling()
   }
 
   func stopSession() {
-    removeForegroundObserver()
     webRTCClient?.close()
     webRTCClient = nil
     delegateAdapter = nil
@@ -60,7 +52,6 @@ class WebRTCSessionViewModel: ObservableObject {
     isActive = false
     connectionState = .disconnected
     roomCode = ""
-    savedRoomCode = nil
     isMuted = false
     remoteVideoTrack = nil
     hasRemoteVideo = false
@@ -79,16 +70,16 @@ class WebRTCSessionViewModel: ObservableObject {
 
   // MARK: - WebRTC + Signaling Setup
 
-  private func setupWebRTCClient(iceServers: [RTCIceServer]?) {
+  private func setupWebRTCClient(videoOnly: Bool, iceServers: [RTCIceServer]?) {
     let client = WebRTCClient()
     let adapter = WebRTCDelegateAdapter(viewModel: self)
     delegateAdapter = adapter
     client.delegate = adapter
-    client.setup(iceServers: iceServers)
+    client.setup(videoOnly: videoOnly, iceServers: iceServers)
     webRTCClient = client
   }
 
-  private func connectSignaling(rejoinCode: String?) {
+  private func connectSignaling() {
     signalingClient?.disconnect()
 
     let signaling = SignalingClient()
@@ -96,12 +87,7 @@ class WebRTCSessionViewModel: ObservableObject {
 
     signaling.onConnected = { [weak self] in
       Task { @MainActor in
-        if let code = rejoinCode {
-          NSLog("[WebRTC] Reconnected, rejoining room: %@", code)
-          self?.signalingClient?.rejoinRoom(code: code)
-        } else {
-          self?.signalingClient?.createRoom()
-        }
+        self?.signalingClient?.createRoom()
       }
     }
 
@@ -114,13 +100,13 @@ class WebRTCSessionViewModel: ObservableObject {
     signaling.onDisconnected = { [weak self] reason in
       Task { @MainActor in
         guard let self, self.isActive else { return }
-        // Don't fully stop -- mark as backgrounded so we can reconnect
-        if self.savedRoomCode != nil {
-          self.connectionState = .backgrounded
-          NSLog("[WebRTC] Signaling disconnected (backgrounded), will rejoin: %@", reason ?? "unknown")
-        } else {
-          self.stopSession()
-          self.errorMessage = "Signaling disconnected: \(reason ?? "Unknown")"
+        NSLog("[WebRTC] Signaling disconnected: %@. Reconnecting in 2s...", reason ?? "unknown")
+        self.connectionState = .connecting
+        // Reconnect after delay instead of giving up
+        Task {
+          try? await Task.sleep(nanoseconds: 2_000_000_000)
+          guard self.isActive else { return }
+          self.connectSignaling()
         }
       }
     }
@@ -134,60 +120,19 @@ class WebRTCSessionViewModel: ObservableObject {
     signaling.connect(url: url)
   }
 
-  // MARK: - Foreground Reconnect
-
-  private func observeForeground() {
-    removeForegroundObserver()
-    foregroundObserver = NotificationCenter.default.addObserver(
-      forName: UIApplication.willEnterForegroundNotification,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      Task { @MainActor in
-        self?.handleReturnToForeground()
-      }
-    }
-  }
-
-  private func removeForegroundObserver() {
-    if let observer = foregroundObserver {
-      NotificationCenter.default.removeObserver(observer)
-      foregroundObserver = nil
-    }
-  }
-
-  private func handleReturnToForeground() {
-    guard isActive, let code = savedRoomCode else { return }
-    NSLog("[WebRTC] App returned to foreground, reconnecting to room: %@", code)
-    connectionState = .connecting
-
-    // Tear down old peer connection, set up fresh one
-    webRTCClient?.close()
-    remoteVideoTrack = nil
-    hasRemoteVideo = false
-
-    Task {
-      let iceServers = await WebRTCConfig.fetchIceServers()
-      setupWebRTCClient(iceServers: iceServers)
-      connectSignaling(rejoinCode: code)
-    }
-  }
-
   // MARK: - Signaling Message Handling
 
   private func handleSignalingMessage(_ message: SignalingMessage) {
     switch message {
     case .roomCreated(let code):
       roomCode = code
-      savedRoomCode = code
       connectionState = .waitingForPeer
-      NSLog("[WebRTC] Room created: %@", code)
+      NSLog("[WebRTC] Connected to server, waiting for viewer...")
 
     case .roomRejoined(let code):
       roomCode = code
-      savedRoomCode = code
       connectionState = .waitingForPeer
-      NSLog("[WebRTC] Room rejoined: %@", code)
+      NSLog("[WebRTC] Reconnected to server, waiting for viewer...")
 
     case .peerJoined:
       NSLog("[WebRTC] Peer joined, creating offer")
@@ -214,14 +159,7 @@ class WebRTCSessionViewModel: ObservableObject {
       connectionState = .waitingForPeer
 
     case .error(let msg):
-      // If rejoin fails (room expired), fall back to creating a new room
-      if savedRoomCode != nil && msg == "Room not found" {
-        NSLog("[WebRTC] Rejoin failed (room expired), creating new room")
-        savedRoomCode = nil
-        signalingClient?.createRoom()
-      } else {
-        errorMessage = msg
-      }
+      errorMessage = msg
 
     case .roomJoined, .offer:
       break
@@ -260,6 +198,27 @@ class WebRTCSessionViewModel: ObservableObject {
     remoteVideoTrack = nil
     hasRemoteVideo = false
     NSLog("[WebRTC] Remote video track removed")
+  }
+
+  // MARK: - Overlay Sender
+
+  /// Push a cooking-state snapshot over the signaling WebSocket so the
+  /// web viewer can render an HTML overlay. Rate-limited to ~2 Hz.
+  @MainActor
+  func sendOverlay(snapshot: WebRTCOverlaySnapshot?) {
+    guard isActive, connectionState == .connected else { return }
+
+    let now = Date()
+    if let last = lastOverlaySentTime, now.timeIntervalSince(last) < 0.5 { return }
+    lastOverlaySentTime = now
+
+    guard let snapshot,
+          let data = try? JSONEncoder().encode(snapshot),
+          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return }
+
+    signalingClient?.send(overlay: payload)
+    NSLog("[WebRTC] Overlay snapshot sent")
   }
 }
 

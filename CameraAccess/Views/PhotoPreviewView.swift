@@ -33,15 +33,43 @@ struct PhotoPreviewView: View {
         }
 
       VStack(spacing: 20) {
+        HStack {
+          Spacer()
+
+          Button {
+            dismissWithAnimation()
+          } label: {
+            Label("Close", systemImage: "xmark")
+              .font(.system(size: 16, weight: .semibold))
+              .foregroundColor(.white)
+              .padding(.horizontal, 16)
+              .padding(.vertical, 10)
+              .background(Color.black.opacity(0.55))
+              .clipShape(Capsule())
+          }
+          .buttonStyle(.plain)
+          .accessibilityIdentifier("close_preview_button")
+        }
+
         photoDisplayView
+
+        Button {
+          showShareSheet = true
+        } label: {
+          Label("Share", systemImage: "square.and.arrow.up")
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.55))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("share_preview_button")
       }
       .padding()
       .offset(dragOffset)
       .animation(.spring(response: 0.6, dampingFraction: 0.8), value: dragOffset)
-    }
-    .task {
-      try? await Task.sleep(nanoseconds: 100_000_000)
-      showShareSheet = true
     }
     .sheet(
       isPresented: $showShareSheet,
@@ -55,29 +83,27 @@ struct PhotoPreviewView: View {
   }
 
   private var photoDisplayView: some View {
-    GeometryReader { geometry in
-      Image(uiImage: photo)
-        .resizable()
-        .aspectRatio(contentMode: .fit)
-        .frame(maxWidth: geometry.size.width, maxHeight: geometry.size.height * 0.6)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-        .gesture(
-          DragGesture()
-            .onChanged { value in
-              dragOffset = value.translation
-            }
-            .onEnded { value in
-              if abs(value.translation.height) > 100 {
-                dismissWithAnimation()
-              } else {
-                withAnimation(.spring()) {
-                  dragOffset = .zero
-                }
+    Image(uiImage: photo)
+      .resizable()
+      .aspectRatio(contentMode: .fit)
+      .frame(maxWidth: .infinity, maxHeight: UIScreen.main.bounds.height * 0.6)
+      .cornerRadius(12)
+      .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+      .gesture(
+        DragGesture()
+          .onChanged { value in
+            dragOffset = value.translation
+          }
+          .onEnded { value in
+            if abs(value.translation.height) > 100 {
+              dismissWithAnimation()
+            } else {
+              withAnimation(.spring()) {
+                dragOffset = .zero
               }
             }
-        )
-    }
+          }
+      )
   }
 
   private func dismissWithAnimation() {

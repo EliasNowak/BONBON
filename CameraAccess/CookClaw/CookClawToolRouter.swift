@@ -8,6 +8,7 @@ class CookClawToolRouter {
   private var inFlightTasks: [String: Task<Void, Never>] = [:]
   private var consecutiveFailures = 0
   private let maxConsecutiveFailures = 3
+  private(set) var lastToolCallStatus: ToolCallStatus = .idle
 
   init(cookClawBridge: CookClawBridge, openClawBridge: OpenClawBridge) {
     self.cookClawBridge = cookClawBridge
@@ -26,12 +27,15 @@ class CookClawToolRouter {
 
     // Circuit breaker
     if consecutiveFailures >= maxConsecutiveFailures {
+      lastToolCallStatus = .failed(callName, "Circuit breaker open")
       let errorResult: ToolResult = .failure(
         "Tool execution temporarily unavailable after \(consecutiveFailures) consecutive failures."
       )
       sendResponse(buildToolResponse(callId: callId, name: callName, result: errorResult))
       return
     }
+
+    lastToolCallStatus = .executing(callName)
 
     let task = Task { @MainActor in
       let result = await self.executeToolCall(call)
@@ -44,8 +48,10 @@ class CookClawToolRouter {
       switch result {
       case .success:
         self.consecutiveFailures = 0
+        self.lastToolCallStatus = .completed(callName)
       case .failure:
         self.consecutiveFailures += 1
+        self.lastToolCallStatus = .failed(callName, result.errorMessage ?? "Unknown error")
       }
 
       let response = self.buildToolResponse(callId: callId, name: callName, result: result)
@@ -64,6 +70,7 @@ class CookClawToolRouter {
         inFlightTasks.removeValue(forKey: id)
       }
     }
+    lastToolCallStatus = .cancelled(ids.first ?? "unknown")
   }
 
   func cancelAll() {
@@ -73,6 +80,7 @@ class CookClawToolRouter {
     }
     inFlightTasks.removeAll()
     consecutiveFailures = 0
+    lastToolCallStatus = .idle
   }
 
   // MARK: - Private
@@ -81,7 +89,7 @@ class CookClawToolRouter {
     switch call.name {
     case "execute":
       // Non-cooking actions delegate to OpenClawBridge
-      let taskDesc = call.args["task"] as? String ?? ""
+      let taskDesc = call.args["task"] as? String ?? String(describing: call.args)
       return await openClawBridge.delegateTask(task: taskDesc, toolName: call.name)
 
     case "update_cooking_state", "set_timer", "cancel_timer",
@@ -128,5 +136,14 @@ class CookClawToolRouter {
         ]
       ]
     ]
+  }
+}
+
+private extension ToolResult {
+  var errorMessage: String? {
+    if case .failure(let error) = self {
+      return error
+    }
+    return nil
   }
 }

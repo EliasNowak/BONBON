@@ -78,6 +78,9 @@ struct StreamSessionView: View {
       NSLog("[StreamSessionView] streaming failed or error shown, aborting gemini start")
       return
     }
+    // Wire the DAT device session into Gemini so CookClaw can drive the glasses display
+    let geminiVMRef = geminiVM
+    geminiVMRef.deviceSession = viewModel.deviceSession
     NSLog("[StreamSessionView] starting Gemini session")
     await geminiVM.startSession()
     NSLog("[StreamSessionView] Gemini session start completed")

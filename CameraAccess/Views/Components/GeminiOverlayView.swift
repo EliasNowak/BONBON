@@ -1,4 +1,5 @@
 import SwiftUI
+import MWDATDisplay
 
 struct GeminiStatusBar: View {
   @ObservedObject var geminiVM: GeminiSessionViewModel
@@ -8,8 +9,15 @@ struct GeminiStatusBar: View {
       // Gemini connection pill
       StatusPill(color: geminiStatusColor, text: geminiStatusText)
 
-      // OpenClaw connection pill
-      StatusPill(color: openClawStatusColor, text: openClawStatusText)
+      if geminiVM.cookingState != nil {
+        // CookClaw mode: show display state pill
+        StatusPill(color: cookClawStatusColor, text: cookClawStatusText)
+      }
+
+      if geminiVM.openClawConnectionState != .notConfigured {
+        // OpenClaw connection pill
+        StatusPill(color: openClawStatusColor, text: openClawStatusText)
+      }
     }
   }
 
@@ -46,6 +54,24 @@ struct GeminiStatusBar: View {
     case .checking: return "OpenClaw..."
     case .unreachable: return "OpenClaw Off"
     case .notConfigured: return "No OpenClaw"
+    }
+  }
+
+  private var cookClawStatusColor: Color {
+    switch geminiVM.cookClawDisplayState {
+    case .started: return .green
+    case .starting, .stopping: return .yellow
+    case .stopped:
+      return geminiVM.cookingState != nil ? .yellow : .gray
+    }
+  }
+
+  private var cookClawStatusText: String {
+    switch geminiVM.cookClawDisplayState {
+    case .started: return "CookClaw"
+    case .starting, .stopping: return "CookClaw..."
+    case .stopped:
+      return geminiVM.cookingState != nil ? "CookClaw Local" : "CookClaw Off"
     }
   }
 }

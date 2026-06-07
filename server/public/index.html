@@ -3,101 +3,241 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VisionClaw - Remote Expert View</title>
+  <title>VisionClaw - Kitchen View</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #2c1e16; color: #fff3e6; font-family: 'Georgia','Times New Roman',serif;
       height: 100vh; overflow: hidden;
     }
     #video-container {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; align-items: center; justify-content: center;
-      background: #111; touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a110d;
+      touch-action: none;
+      padding: 16px;
     }
     /* Fallback single video (used when no local camera) */
     #fallback-video {
-      width: 100%; height: 100%; object-fit: contain;
+      width: 100%;
+      height: auto;
+      max-height: 100vh;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      border-radius: 16px;
     }
     /* PiP layout */
     #pip-container {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; display: none;
+      background: #1a110d; display: none;
     }
     #main-video {
-      width: 100%; height: 100%; object-fit: contain;
+      width: 100%;
+      height: auto;
+      max-height: 100vh;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      border-radius: 16px;
     }
     #pip-video {
       position: absolute;
       top: 16px; right: 16px;
-      width: 160px; height: 213px;
+      width: 240px; height: 135px;
       object-fit: cover;
       border-radius: 12px;
-      border: 2px solid rgba(255,255,255,0.3);
+      border: 2px solid rgba(255,140,0,0.5);
       cursor: pointer;
       z-index: 5;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      background: #1a1a1a;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      background: #2c1e16;
     }
-    @media (max-width: 600px) {
+    @media (max-width: 900px) {
       #pip-video {
-        width: 100px; height: 133px;
+        width: 160px; height: 90px;
         top: 12px; right: 12px;
       }
     }
     #controls {
-      position: absolute; top: 16px; right: 16px;
-      display: flex; gap: 8px; z-index: 10;
+      position: absolute; top: 20px; right: 20px;
+      display: flex; gap: 10px; z-index: 10;
     }
     input {
-      padding: 12px 16px; font-size: 20px; border-radius: 8px;
-      border: 1px solid #333; background: #222; color: #fff;
-      text-transform: uppercase; letter-spacing: 6px; width: 180px;
-      text-align: center; font-family: 'SF Mono', 'Menlo', monospace;
+      padding: 16px 20px; font-size: 24px; border-radius: 16px;
+      border: 2px solid #5d4037; background: #3e2723; color: #fff3e6;
+      text-transform: uppercase; letter-spacing: 8px; width: 200px;
+      text-align: center; font-family: 'SF Mono','Menlo',monospace;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
     }
     input::placeholder {
-      letter-spacing: 2px; font-size: 14px; color: #555;
+      letter-spacing: 3px; font-size: 16px; color: #8d6e63;
     }
     button {
-      padding: 8px 16px; font-size: 13px; border-radius: 8px;
-      border: none; cursor: pointer; font-weight: 600;
-      transition: opacity 0.2s;
+      padding: 12px 22px; font-size: 15px; border-radius: 14px;
+      border: none; cursor: pointer; font-weight: 700;
+      transition: transform 0.15s, box-shadow 0.15s;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
-    button:hover { opacity: 0.85; }
-    button:active { opacity: 0.7; }
-    #join-btn { background: #0a84ff; color: #fff; }
-    #disconnect-btn { background: #ff3b30; color: #fff; display: none; }
-    #mic-btn { background: #333; color: #fff; display: none; }
-    #mic-btn.muted { background: #ff3b30; }
-    #cam-btn { background: #333; color: #fff; display: none; }
-    #cam-btn.muted { background: #ff3b30; }
+    button:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+    button:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    #disconnect-btn { background: #bf360c; color: #fff; display: none; }
+    #mic-btn { background: #4e342e; color: #fff3e6; display: none; }
+    #cam-btn { background: #4e342e; color: #fff3e6; display: none; }
+    #cam-btn.muted { background: #bf360c; color: #fff; }
     #status {
-      position: absolute; top: 16px; left: 16px;
-      padding: 6px 14px; border-radius: 16px; font-size: 13px;
-      font-weight: 500; z-index: 10;
+      position: absolute; top: 20px; left: 20px;
+      padding: 8px 18px; border-radius: 20px; font-size: 15px;
+      font-weight: 700; z-index: 10; letter-spacing: 0.5px;
+      backdrop-filter: blur(4px);
     }
-    .status-waiting { background: rgba(255,204,0,0.2); color: #ffcc00; }
-    .status-connected { background: rgba(48,209,88,0.2); color: #30d158; }
-    .status-disconnected { background: rgba(255,59,48,0.2); color: #ff3b30; }
-    .status-idle { background: rgba(255,255,255,0.1); color: #888; }
+    .status-waiting { background: rgba(255,167,38,0.25); color: #ffcc80; border: 1px solid rgba(255,167,38,0.4); }
+    .status-connected { background: rgba(102,187,106,0.25); color: #a5d6a7; border: 1px solid rgba(102,187,106,0.4); }
+    .status-disconnected { background: rgba(239,83,80,0.25); color: #ef9a9a; border: 1px solid rgba(239,83,80,0.4); }
+    .status-idle { background: rgba(255,255,255,0.08); color: #a1887f; border: 1px solid rgba(255,255,255,0.12); }
     #join-panel {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
       text-align: center; z-index: 10;
+      background: rgba(44,30,22,0.85);
+      padding: 48px 56px;
+      border-radius: 28px;
+      border: 1px solid rgba(255,140,0,0.2);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+      max-width: 90vw;
     }
     #join-panel h1 {
-      font-size: 28px; font-weight: 600; margin-bottom: 8px;
+      font-size: 38px; font-weight: 700; margin-bottom: 10px;
+      color: #ffab40; letter-spacing: 1px;
+    }
+    #join-panel .tagline {
+      font-size: 16px; color: #bcaaa4; margin-bottom: 8px;
+      font-style: italic;
     }
     #join-panel p {
-      color: #888; margin-bottom: 24px; font-size: 15px;
+      color: #a1887f; margin-bottom: 28px; font-size: 16px;
     }
     .join-row {
-      display: flex; gap: 12px; justify-content: center;
+      display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
     }
     #waiting-msg {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
       text-align: center; display: none; z-index: 10;
+      background: rgba(44,30,22,0.8);
+      padding: 28px 40px;
+      border-radius: 24px;
+      border: 1px solid rgba(255,140,0,0.2);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
     }
-    #waiting-msg p { color: #888; font-size: 16px; }
+    #waiting-msg p { color: #d7ccc8; font-size: 18px; }
+    /* === HUD Overlay Styles (CookClaw companion) === */
+    #hud-overlay {
+      position: absolute;
+      top: 16px; left: 16px; right: 16px;
+      pointer-events: none;
+      z-index: 15;
+      display: flex;
+      justify-content: center;
+    }
+    @media (min-width: 900px) {
+      #hud-overlay {
+        justify-content: flex-start;
+      }
+    }
+    .hud-card {
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 14px 18px;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 380px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      pointer-events: auto;
+    }
+    .hud-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #9ca3af;
+      letter-spacing: 0.3px;
+    }
+    .hud-header .hud-icon { font-size: 14px; }
+    .hud-progress { font-size: 12px; color: #9ca3af; margin-bottom: 8px; }
+    .hud-step {
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1.3;
+      margin-bottom: 6px;
+      color: #f3f4f6;
+    }
+    .hud-body {
+      font-size: 13px;
+      color: #c4c8ce;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .hud-timer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .hud-timer .paused { color: #fca5a5; }
+    .hud-timer .finished { color: #a7f3d0; }
+    .hud-warnings { margin-top: 4px; }
+    .hud-warning {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      color: #fff;
+      background: rgba(239,68,68,0.25);
+      border: 1px solid rgba(239,68,68,0.4);
+    }
+    .hud-warning.safety { background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.4); }
+    .hud-warning.quality { background: rgba(245,158,11,0.25); border-color: rgba(245,158,11,0.4); }
+    .hud-warning.missingItem { background: rgba(59,130,246,0.25); border-color: rgba(59,130,246,0.4); }
+    .hud-warning.uncertainty { background: rgba(139,92,246,0.25); border-color: rgba(139,92,246,0.4); }
+    .hud-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .hud-btn {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .hud-btn.primary { background: #e65100; color: #fff; }
+    .hud-btn.secondary { background: rgba(255,255,255,0.15); color: #fff3e6; }
+
+    /* Decorative subtle radial glow behind join panel */
+    #video-container::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 600px; height: 600px;
+      transform: translate(-50%,-50%);
+      background: radial-gradient(circle, rgba(230,81,0,0.08) 0%, transparent 70%);
+      pointer-events: none; z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -115,15 +255,35 @@
 
     <div id="join-panel">
       <h1>VisionClaw</h1>
-      <p>Enter the room code shown on the glasses app</p>
-      <div class="join-row">
-        <input id="room-input" maxlength="6" placeholder="CODE" autofocus>
-        <button id="join-btn" onclick="joinRoom()">Join</button>
-      </div>
+      <p class="tagline">Your eyes in the kitchen</p>
+      <p>Waiting for stream... Keep this page open.</p>
     </div>
 
     <div id="waiting-msg">
-      <p>Connected to room. Waiting for stream...</p>
+      <p>Connected. Waiting for stream...</p>
+    </div>
+
+    <!-- === HUD Overlay: simulates the glasses cooking cards === -->
+    <div id="hud-overlay" style="display:none;">
+      <div class="hud-card" id="hud-card">
+        <div class="hud-header" id="hud-header">
+          <span class="hud-icon" id="hud-icon">🍴</span>
+          <span class="hud-recipe" id="hud-recipe">CookClaw</span>
+        </div>
+        <div class="hud-progress" id="hud-progress"></div>
+        
+        <!-- Step progress bar -->
+        <div class="step-progress" id="step-progress"></div>
+        
+        <div class="hud-step" id="hud-step">Ready to cook?</div>
+        <div class="hud-body" id="hud-body"></div>
+        <div class="hud-timer" id="hud-timer"></div>
+        <div class="hud-warnings" id="hud-warnings"></div>
+        <div class="hud-controls" id="hud-controls"></div>
+        
+        <!-- Interactive Step List -->
+        <div class="step-list" id="step-list"></div>
+      </div>
     </div>
 
     <div id="controls">
@@ -134,6 +294,8 @@
   </div>
 
   <script>
+    console.log('[VisionClaw] Script loaded');
+
     let ws, pc, localStream;
     let localVideoStream = null;
     let pendingCandidates = [];
@@ -141,28 +303,37 @@
     let remoteStream = null;
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${location.host}`;
+    console.log('[VisionClaw] WebSocket URL:', wsUrl);
 
-    function joinRoom() {
-      const code = document.getElementById('room-input').value.toUpperCase().trim();
-      if (code.length !== 6) return;
+    // Auto-join immediately
+    autoJoin();
 
-      // Clean up any previous session
+    function autoJoin() {
+      console.log('[VisionClaw] autoJoin called');
       cleanup();
-
+      console.log('[VisionClaw] cleanup done, creating WebSocket...');
       ws = new WebSocket(wsUrl);
-      const sock = ws;
       ws.onopen = () => {
-        if (sock.readyState === WebSocket.OPEN) {
-          sock.send(JSON.stringify({ type: 'join', room: code }));
-          setStatus('Joining...', 'waiting');
-        }
+        console.log('[VisionClaw] WebSocket OPEN, sending join');
+        ws.send(JSON.stringify({ type: 'join' }));
+        setStatus('Waiting for stream...', 'waiting');
       };
-      ws.onmessage = (e) => handleSignaling(JSON.parse(e.data));
-      ws.onclose = () => {
+      ws.onmessage = (e) => {
+        console.log('[VisionClaw] Received:', e.data);
+        handleSignaling(JSON.parse(e.data));
+      };
+      ws.onclose = (e) => {
+        console.log('[VisionClaw] WebSocket CLOSED', e.code, e.reason);
         setStatus('Disconnected', 'disconnected');
         showControls(false);
+        // Auto-reconnect after 1s
+        setTimeout(() => {
+          console.log('[VisionClaw] Auto-reconnecting...');
+          autoJoin();
+        }, 1000);
       };
-      ws.onerror = () => {
+      ws.onerror = (e) => {
+        console.log('[VisionClaw] WebSocket ERROR', e);
         setStatus('Connection error', 'disconnected');
       };
     }
@@ -204,6 +375,10 @@
           }
           break;
         }
+
+        case 'overlay':
+          updateHUD(msg);
+          break;
 
         case 'peer_left':
           if (pc) { pc.close(); pc = null; }
@@ -435,7 +610,6 @@
       setStatus('Disconnected', 'disconnected');
       showControls(false);
       document.getElementById('join-panel').style.display = 'block';
-      document.getElementById('room-input').value = '';
     }
 
     function showControls(visible) {
@@ -450,10 +624,85 @@
       el.className = 'status-' + cls;
     }
 
-    // Allow Enter key to join
-    document.getElementById('room-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') joinRoom();
-    });
+    // ============ HUD Overlay ============
+    function updateHUD(msg) {
+      const overlay = document.getElementById('hud-overlay');
+      if (!overlay) return;
+
+      // Show overlay once we receive any data
+      overlay.style.display = 'flex';
+
+      const data = msg;
+      const recipeTitle = data.recipeTitle || 'CookClaw';
+      const step = data.stepInstruction || '';
+      const visualCue = data.visualCue || '';
+      const targetTemperature = data.targetTemperature || '';
+      const progress = data.progressText || '';
+      const isComplete = !!data.isComplete;
+      const isPaused = !!data.isPaused;
+
+      document.getElementById('hud-recipe').textContent = recipeTitle;
+      document.getElementById('hud-icon').textContent = isComplete ? '✅' : recipeTitle ? '🍴' : '👋';
+      document.getElementById('hud-progress').textContent = progress;
+
+      const stepEl = document.getElementById('hud-step');
+      if (isComplete) {
+        stepEl.textContent = 'All done! Enjoy your meal. 🎉';
+        stepEl.style.color = '#a7f3d0';
+      } else if (step) {
+        stepEl.textContent = step;
+        stepEl.style.color = '#f3f4f6';
+      } else {
+        stepEl.textContent = 'Ready to cook?';
+        stepEl.style.color = '#f3f4f6';
+      }
+
+      // Body detail
+      let bodyParts = [];
+      if (visualCue) bodyParts.push('Look for: ' + visualCue);
+      if (targetTemperature) bodyParts.push('Heat: ' + targetTemperature);
+      document.getElementById('hud-body').innerHTML = bodyParts.map(b => `<div>${escapeHtml(b)}</div>`).join('');
+
+      // Timers
+      let timersHtml = '';
+      if (data.activeTimers && data.activeTimers.length > 0) {
+        timersHtml = data.activeTimers.map(t => {
+          let statusClass = '';
+          if (t.isFinished) statusClass = 'finished';
+          else if (t.isPaused) statusClass = 'paused';
+          const mm = Math.floor(t.remainingSeconds / 60).toString().padStart(2, '0');
+          const ss = (t.remainingSeconds % 60).toString().padStart(2, '0');
+          return `<div class="hud-timer ${statusClass}">⏱️ ${escapeHtml(t.name)}: ${mm}:${ss}</div>`;
+        }).join('');
+      }
+      document.getElementById('hud-timer').innerHTML = timersHtml;
+
+      // Warnings
+      let warningsHtml = '';
+      if (data.warnings && data.warnings.length > 0) {
+        warningsHtml = data.warnings.map(w => {
+          const cls = w.type || 'uncertainty';
+          return `<div class="hud-warning ${cls}">⚠️ ${escapeHtml(w.message)}</div>`;
+        }).join('');
+      }
+      document.getElementById('hud-warnings').innerHTML = warningsHtml;
+
+      // Controls
+      let controlsHtml = '';
+      if (isPaused || isComplete) {
+        controlsHtml = '<div class="hud-controls">';
+        if (isPaused) controlsHtml += '<button class="hud-btn primary">▶️ Resume</button>';
+        if (isComplete) controlsHtml += '<button class="hud-btn secondary">➕ New Recipe</button>';
+        controlsHtml += '</div>';
+      }
+      document.getElementById('hud-controls').innerHTML = controlsHtml;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
   </script>
 </body>
 </html>
