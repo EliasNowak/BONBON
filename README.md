@@ -71,3 +71,20 @@ Then set `webrtcSignalingURL` in `CameraAccess/Secrets.swift` or in app Settings
 Use Start streaming if you only want the camera stream/photo capture without Gemini.
 
 Without glasses, use Start on iPhone to test the voice and vision pipeline with the phone camera.
+
+## License
+
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
+
+## Quick Start (server)
+
+Run the optional WebRTC signaling server used for browser POV streaming:
+
+```bash
+cd server
+npm install
+npm start
+```
+
+Set `webrtcSignalingURL` in `CameraAccess/Secrets.swift` or in the app Settings to point at the running server.
+
